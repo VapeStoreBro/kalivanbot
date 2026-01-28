@@ -64,6 +64,7 @@ data.setdefault("recent_questions", {})
 data.setdefault("sliv_usage", {})
 data.setdefault("hint_usage", {})
 data.setdefault("catch_count", {})
+data.setdefault("chat_users", {})
 data.setdefault("legend_sent", {})
 
 # ================== UTILS ==================
@@ -129,18 +130,39 @@ async def helpslang(message: Message):
 @dp.message(F.text)
 async def meme_handler(message: Message):
     text = normalize(message.text)
+    chat_id = str(message.chat.id)
+    user_id = str(message.from_user.id)
+
+    data.setdefault("chat_users", {}).setdefault(chat_id, {})
+    data["chat_users"][chat_id][user_id] = {
+        "first_name": message.from_user.first_name
+    }
+
+    save_data()
     if any(t in text for t in MEME_TRIGGERS):
         await message.delete()
 
         chat = str(message.chat.id)
-        user = str(message.from_user.id)
+
+        users = list(data["chat_users"].get(chat, {}).keys())
+
+        # fallback если вдруг пусто
+        if not users:
+            target_id = str(message.from_user.id)
+            target_name = message.from_user.first_name
+        else:
+            target_id = random.choice(users)
+            target_name = data["chat_users"][chat][target_id]["first_name"]
 
         data.setdefault("catch_count", {}).setdefault(chat, {})
-        data["catch_count"][chat][user] = data["catch_count"][chat].get(user, 0) + 1
-        count = data["catch_count"][chat][user]
+        data["catch_count"][chat][target_id] = data["catch_count"][chat].get(target_id, 0) + 1
+        count = data["catch_count"][chat][target_id]
 
         img = "image.jpg"
-        caption = f"🐓 {mention(message.from_user)} догнал Калыван"
+        caption = (
+            f"🐓 петуха <a href='tg://user?id={target_id}'>"
+            f"{target_name}</a> догнал Калыван"
+        )
 
         if count == 5:
             img = "catch.jpg"
@@ -312,3 +334,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
