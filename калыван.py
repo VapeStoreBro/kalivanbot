@@ -255,6 +255,7 @@ async def quiz_commands_and_answers(message: Message):
         await message.reply(f"✅ Верно! {mention(message.from_user)}")
 
         achievements = {
+            2: ("legend.jpg", "хохо ныкитэ"),
             10: ("legend.jpg", "ахуеть че за легенда набил 10 побед"),
             20: ("legend2.jpg", "какафki"),
             30: ("legend3.jpg", "калыванчик в попе пальчик"),
@@ -334,4 +335,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
