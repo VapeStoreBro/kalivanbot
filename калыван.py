@@ -7,7 +7,7 @@ from pathlib import Path
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
+from aiogram.enums import ChatType, ParseMode
 from aiogram.types import (
     CallbackQuery,
     FSInputFile,
@@ -135,12 +135,12 @@ async def start(message: Message):
 @dp.message(F.text.lower().contains("helpslang"))
 async def helpslang(message: Message):
     admin_help = ""
-    if message.from_user.id in ADMIN_IDS:
+    if (
+        message.from_user.id in ADMIN_IDS
+        and message.chat.type == ChatType.PRIVATE
+    ):
         admin_help = (
-            "\nАдмин-команды:\n"
-            "/addcountry — добавить страну и столицу\n"
-            "/customcountries — список добавленных стран\n"
-            "/cancel — отменить добавление\n"
+            "\n🔐 Скрытая админка стран: /admin\n"
         )
 
     msg = await message.answer(
