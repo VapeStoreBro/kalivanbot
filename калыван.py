@@ -2,18 +2,22 @@ import asyncio
 import json
 import random
 import time
+from html import escape
 from pathlib import Path
 
 from aiogram import Bot, Dispatcher, F
+from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.types import (
-    Message, CallbackQuery,
-    InlineKeyboardMarkup, InlineKeyboardButton,
-    FSInputFile
+    CallbackQuery,
+    FSInputFile,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
 )
-from aiogram.client.default import DefaultBotProperties
 
 from countries import COUNTRIES
+from country_admin import ADMIN_IDS, register_country_admin
 
 # ================== CONFIG ==================
 BOT_TOKEN = "8245111028:AAEX8C4Q7DYot-a4NHQtqxfJTlvoKrCFzXQ"
@@ -33,13 +37,13 @@ DATA_FILE = "data.json"
 MEME_TRIGGERS = [
     "догони меня калыван",
     "догони калыван",
-    "калыван догони"
+    "калыван догони",
 ]
 
 # ================== INIT ==================
 bot = Bot(
     BOT_TOKEN,
-    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+    default=DefaultBotProperties(parse_mode=ParseMode.HTML),
 )
 dp = Dispatcher()
 
@@ -50,9 +54,15 @@ def load_data():
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
 def save_data():
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def normalize(text: str):
+    return " ".join(text.lower().replace("ё", "е").strip().split())
+
 
 data = load_data()
 
@@ -67,35 +77,42 @@ data.setdefault("chat_users", {})
 data.setdefault("legend_sent", {})
 
 # ================== UTILS ==================
-def normalize(text: str):
-    return text.lower().replace("ё", "е").strip()
-
 def now():
     return int(time.time())
+
 
 def clean_usage(lst, window):
     t = now()
     return [x for x in lst if t - x <= window]
 
+
 def mention(user):
-    return f'<a href="tg://user?id={user.id}">{user.first_name}</a>'
+    return f'<a href="tg://user?id={user.id}">{escape(user.first_name)}</a>'
+
 
 async def auto_delete(message: Message):
     await asyncio.sleep(AUTO_DELETE_SECONDS)
     try:
         await message.delete()
-    except:
+    except Exception:
         pass
+
 
 def donate_kb():
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="💸 Бабки максимке", url=DONATE_URL)]]
+        inline_keyboard=[
+            [InlineKeyboardButton(text="💸 Бабки максимке", url=DONATE_URL)]
+        ]
     )
+
 
 def hint_kb():
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="💡 Подсказка", callback_data="hint")]]
+        inline_keyboard=[
+            [InlineKeyboardButton(text="💡 Подсказка", callback_data="hint")]
+        ]
     )
+
 
 # ================== START ==================
 @dp.message(F.text.lower().in_(["/start", "start"]))
@@ -109,21 +126,36 @@ async def start(message: Message):
             "Если понравился бот — ниже кнопка доната.\n\n"
             "Остальную инфу можно узнать нажав /helpslang"
         ),
-        reply_markup=donate_kb()
+        reply_markup=donate_kb(),
     )
     asyncio.create_task(auto_delete(msg))
+
 
 # ================== HELP ==================
 @dp.message(F.text.lower().contains("helpslang"))
 async def helpslang(message: Message):
+    admin_help = ""
+    if message.from_user.id in ADMIN_IDS:
+        admin_help = (
+            "\nАдмин-команды:\n"
+            "/addcountry — добавить страну и столицу\n"
+            "/customcountries — список добавленных стран\n"
+            "/cancel — отменить добавление\n"
+        )
+
     msg = await message.answer(
         "Все полезные команды калывана:\n\n"
         "/rate — рейтинг в квиз\n"
         "/sliv — пропустить вопрос (3 раза за 10 минут)\n"
-        "/stop — остановка квиза\n\n"
+        "/stop — остановка квиза\n"
+        f"{admin_help}\n"
         "Вопросы/предложения: @gangstore44"
     )
     asyncio.create_task(auto_delete(msg))
+
+
+register_country_admin(dp)
+
 
 # ================== MEME (ВСЕГДА ПЕРВЫЙ) ==================
 @dp.message(F.text)
@@ -142,7 +174,6 @@ async def meme_handler(message: Message):
         await message.delete()
 
         chat = str(message.chat.id)
-
         users = list(data["chat_users"].get(chat, {}).keys())
 
         # fallback если вдруг пусто
@@ -154,13 +185,15 @@ async def meme_handler(message: Message):
             target_name = data["chat_users"][chat][target_id]["first_name"]
 
         data.setdefault("catch_count", {}).setdefault(chat, {})
-        data["catch_count"][chat][target_id] = data["catch_count"][chat].get(target_id, 0) + 1
+        data["catch_count"][chat][target_id] = (
+            data["catch_count"][chat].get(target_id, 0) + 1
+        )
         count = data["catch_count"][chat][target_id]
 
         img = "image.jpg"
         caption = (
             f"🐓 петуха <a href='tg://user?id={target_id}'>"
-            f"{target_name}</a> догнал Калыван"
+            f"{escape(target_name)}</a> догнал Калыван"
         )
 
         if count == 5:
@@ -170,13 +203,14 @@ async def meme_handler(message: Message):
         msg = await message.answer_photo(
             FSInputFile(img),
             caption=caption,
-            reply_markup=donate_kb()
+            reply_markup=donate_kb(),
         )
         asyncio.create_task(auto_delete(msg))
         save_data()
         return
 
     await quiz_commands_and_answers(message)
+
 
 # ================== QUIZ CORE ==================
 async def quiz_commands_and_answers(message: Message):
@@ -219,7 +253,9 @@ async def quiz_commands_and_answers(message: Message):
 
         country = data["current_question"].get(chat_id)
         if country:
-            await message.reply(f"Правильный ответ: <b>{COUNTRIES[country]['capital']}</b>")
+            await message.reply(
+                f"Правильный ответ: <b>{escape(COUNTRIES[country]['capital'])}</b>"
+            )
             await send_question(message.chat.id)
 
         save_data()
@@ -235,7 +271,8 @@ async def quiz_commands_and_answers(message: Message):
         for country, info in COUNTRIES.items():
             if country in text or any(a in text for a in info["aliases"]):
                 await message.reply(
-                    f"Столица <b>{country}</b> — <b>{info['capital']}</b>"
+                    f"Столица <b>{escape(country)}</b> — "
+                    f"<b>{escape(info['capital'])}</b>"
                 )
                 return
 
@@ -248,7 +285,9 @@ async def quiz_commands_and_answers(message: Message):
 
     if text == capital:
         data.setdefault("scores", {}).setdefault(chat_id, {})
-        data["scores"][chat_id][user_id] = data["scores"][chat_id].get(user_id, 0) + 1
+        data["scores"][chat_id][user_id] = (
+            data["scores"][chat_id].get(user_id, 0) + 1
+        )
         wins = data["scores"][chat_id][user_id]
 
         await message.reply(f"✅ Верно! {mention(message.from_user)}")
@@ -271,6 +310,7 @@ async def quiz_commands_and_answers(message: Message):
     else:
         await message.reply("❌ Хуй там.")
 
+
 # ================== QUESTIONS ==================
 def get_random_country(chat_id):
     recent = data["recent_questions"].get(chat_id, [])
@@ -284,6 +324,7 @@ def get_random_country(chat_id):
     data["recent_questions"][chat_id] = recent[-RECENT_QUESTIONS_LIMIT:]
     return country
 
+
 async def send_question(chat_id):
     chat_id = str(chat_id)
     country = get_random_country(chat_id)
@@ -291,9 +332,10 @@ async def send_question(chat_id):
     save_data()
     await bot.send_message(
         chat_id,
-        f"🏳️ Столица какой страны: <b>{country.upper()}</b>?",
-        reply_markup=hint_kb()
+        f"🏳️ Столица какой страны: <b>{escape(country.upper())}</b>?",
+        reply_markup=hint_kb(),
     )
+
 
 # ================== HINT (ALERT WINDOW) ==================
 @dp.callback_query(F.data == "hint")
@@ -305,7 +347,7 @@ async def hint(callback: CallbackQuery):
     if len(usage) >= HINT_LIMIT:
         await callback.answer(
             "Ты уже заебал 😈\nЛимит подсказок исчерпан",
-            show_alert=True
+            show_alert=True,
         )
         return
 
@@ -320,21 +362,18 @@ async def hint(callback: CallbackQuery):
     capital = COUNTRIES[country]["capital"][:2].upper()
 
     await callback.answer(
-
         f"Ебать ты тупой 😈\n"
         f"Первые две буквы столицы:\n\n"
         f"{capital}…",
-        show_alert=True
+        show_alert=True,
     )
     save_data()
+
 
 # ================== RUN ==================
 async def main():
     await dp.start_polling(bot)
 
+
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-
-
