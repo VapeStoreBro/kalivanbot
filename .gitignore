@@ -1,0 +1,4 @@
+custom_countries.json
+custom_countries.json.tmp
+__pycache__/
+*.pyc
